@@ -271,7 +271,33 @@ class PRAuthorAgent:
                 template="contract-stub"
             ))
 
+        # Generate telemetry validation tests
+        # Tests are generated for any instrumentation gap (missing_otel, missing_correlation)
+        instrumentation_gaps = [g for g in diff_plan.get("gaps", [])
+                                if g["type"] in ("missing_otel", "missing_correlation")]
+        if instrumentation_gaps:
+            test_content = self.template_engine.render_telemetry_test(context)
+            test_path = self._get_test_path(context)
+            artifacts.append(GeneratedArtifact(
+                file_path=test_path,
+                content=test_content,
+                action="create",
+                template="telemetry-test"
+            ))
+
         return artifacts
+
+    def _get_test_path(self, context: TemplateContext) -> str:
+        """Determine the test file path based on language."""
+        lang = context.language
+        service_name = context.service_name
+
+        test_paths = {
+            "java": f"src/test/java/com/company/{service_name.replace('-', '/')}/otel/{context.service_name.replace('-', '').title()}OtelInterceptorTest.java",
+            "python": f"tests/test_otel_{service_name.replace('-', '_')}.py",
+            "go": f"internal/observability/otel_test.go"
+        }
+        return test_paths.get(lang, f"tests/test_telemetry.{lang}")
 
     def _generate_pr_description(
         self,
